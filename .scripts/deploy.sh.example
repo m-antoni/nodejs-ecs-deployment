@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# ============================================================
+# AWS ECR Deploy Script
+# ============================================================
+
+# Authenticate to ECR
+echo "Authenticating to ECR..."
+aws ecr get-login-password --region <REGION> | docker login --username AWS --password-stdin <AWS_ID>.dkr.ecr.<REGION>.amazonaws.com
+echo "Authenticated successfully!"
+
+# Tag the image
+echo "Tagging image..."
+docker tag node-app:latest <AWS_ID>.dkr.ecr.<REGION>.amazonaws.com/node-app:latest
+echo "Image tagged successfully!"
+
+# Push to ECR
+echo "Pushing image to ECR..."
+docker push <AWS_ID>.dkr.ecr.<REGION>.amazonaws.com/node-app:latest
+echo "Image pushed to Amazon ECR successfully!"
