@@ -42,13 +42,15 @@ docker run -p 5000:5000 -e API_ENDPOINT=https://api.openweathermap.org -e API_KE
 
 ## AWS Deployment
 
-### 1. Create ECR Repository
+### Using AWS CLI
+
+#### 1. Create ECR Repository
 
 ```bash
 aws ecr create-repository --repository-name node-app
 ```
 
-### 2. Build & Push Image
+#### 2. Build & Push Image
 
 ```bash
 aws ecr get-login-password --region <REGION> | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com
@@ -57,9 +59,43 @@ docker tag node-app:latest <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/node-app:
 docker push <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/node-app:latest
 ```
 
-### 3. Deploy to ECS Fargate
+#### 3. Deploy to ECS Fargate
 
-- Create an ECS cluster
-- Define a task using the Fargate launch type
-- Use the pushed ECR image
-- Configure networking and service
+```bash
+aws ecs create-cluster --cluster-name node-app-cluster
+aws ecs register-task-definition --cli-input-json file://task-definition.json
+aws ecs create-service --cluster node-app-cluster --service-name node-app-service --task-definition node-app --launch-type FARGATE --desired-count 1
+```
+
+### Using AWS Console (UI)
+
+#### 1. Create ECR Repository
+
+1. Go to **AWS Console** > **ECR** > **Repositories**
+2. Click **Create repository**
+3. Enter repository name: `node-app`
+4. Click **Create repository**
+
+#### 2. Push Image
+
+1. Select your new repository
+2. Click **View push commands**
+3. Follow the 4 commands shown — they will be specific to your account and region:
+   - **Command 1**: Authenticate Docker to ECR
+   - **Command 2**: Build your image
+   - **Command 3**: Tag your image
+   - **Command 4**: Push your image
+
+#### 3. Deploy to ECS Fargate
+
+1. Go to **AWS Console** > **ECS** > **Clusters**
+2. Click **Create cluster**
+3. Select **Fargate** as infrastructure type
+4. Enter cluster name and click **Create**
+5. Go to **Task Definitions** > **Create new Task Definition**
+6. Select **Fargate** launch type
+7. Add container with your ECR image URI
+8. Click **Create**
+9. Go to your cluster > **Services** > **Create**
+10. Select your task definition and configure networking
+11. Click **Create service**
