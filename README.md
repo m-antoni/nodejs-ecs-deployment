@@ -4,18 +4,18 @@ A simple Node.js app, built as a hands-on project for learning AWS deployment wi
 
 ## Tech Stack
 
-| Tech                | Description                                       |
-| ------------------- | ------------------------------------------------- |
-| Node.js             | JavaScript runtime                                |
-| Express             | Web framework for building REST APIs              |
-| Nginx               | Reverse proxy, load balancer, SSL termination     |
-| Docker              | Containerization platform                         |
-| AWS ECR             | Elastic Container Registry - stores Docker images |
-| AWS ECS             | Elastic Container Service - runs containers       |
-| AWS Fargate         | Serverless compute engine for ECS                 |
-| AWS Secrets Manager | Stores and manages secrets like API keys          |
-| AWS IAM             | Manages access roles and permissions              |
-| AWS CLI             | Command-line tool for managing AWS services       |
+| Tech                | Description                                            |
+| ------------------- | ------------------------------------------------------ |
+| Node.js             | JavaScript runtime                                     |
+| Express             | Web framework for building REST APIs                   |
+| Nginx               | Reverse proxy (load balancing, caching, SSL available) |
+| Docker              | Containerization platform                              |
+| AWS ECR             | Elastic Container Registry - stores Docker images      |
+| AWS ECS             | Elastic Container Service - runs containers            |
+| AWS Fargate         | Serverless compute engine for ECS                      |
+| AWS Secrets Manager | Stores and manages secrets like API keys               |
+| AWS IAM             | Manages access roles and permissions                   |
+| AWS CLI             | Command-line tool for managing AWS services            |
 
 ## Architecture
 
@@ -24,29 +24,28 @@ A simple Node.js app, built as a hands-on project for learning AWS deployment wi
 |                    DEPLOYMENT FLOW                     |
 +--------------------------------------------------------+
 
- [ Docker Build ] ──▶ [ ECR Repo ] ──▶ [ Task Definition ]
+[ Docker Build ] ──▶ [ ECR Repo ] ──▶ [ Task Definition ]
                                                 │
-  ┌─────────────────────────────────────────────┘
-  ▼
+            ┌───────────────────────────────────┘
+            ▼
  ┌── ECS Fargate Cluster ────────────────────────────────┐
  │ Cluster: node-app-dev-cluster                         │
  │                                                       │
  │ ┌── Service: node-app-dev-service ──────────────────┐ │
  │ │                                                   │ │
- │ │  [ Task 1: Nginx :80/:443 → Node.js :5000 ]       │ │
- │ │  [ Task 2: Nginx :80/:443 → Node.js :5000 ]       │ │
+ │ │  [ Task 1: Nginx :80 → Node.js :5000 ]            │ │
  │ └───────────────────────────────────────────────────┘ │
  └───────────────────────────────────────────────────────┘
 
- NGINX FEATURES:
+ NGINX FEATURES (commented out, available when needed):
   • Load Balancing ──▶ Distributes traffic across tasks
   • Rate Limiting  ──▶ 10 req/s per IP on /weather
   • Caching        ──▶ Static assets cached for 1 day
-  • SSL/HTTPS      ──▶ Self-signed cert (auto-generated)
+  • SSL/HTTPS      ──▶ Self-signed cert (auto-generated in Docker)
 
  CONFIG & ACCESS:
   • Secrets Manager ──▶ IAM Role ──▶ Task Definition
-  • User ──▶ HTTP:80 → HTTPS:443 ──▶ Security Group ──▶ Nginx ──▶ Container
+  • User ──▶ HTTP:80 ──▶ Security Group ──▶ Nginx ──▶ Container
 ```
 
 ## Prerequisites
@@ -76,17 +75,17 @@ GET /weather?q=manila
 cp nginx.conf.example nginx.conf
 ```
 
-Edit `nginx.conf` and replace `yourdomain.com` with your actual domain.
+Edit `nginx.conf` — works with any IP or domain out of the box (`server_name _`).
 
 ### 2. Features
 
-| Feature          | Description                                 |
-| ---------------- | ------------------------------------------- |
-| Load Balancing   | Distributes traffic across multiple tasks   |
-| Rate Limiting    | 10 requests/second per IP on `/weather`     |
-| Caching          | Static assets cached for 1 day              |
-| SSL/HTTPS        | Self-signed cert (auto-generated in Docker) |
-| Security Headers | XSS, clickjacking protection                |
+| Feature          | Description                         |
+| ---------------- | ----------------------------------- |
+| Load Balancing   | Distributes traffic (commented out) |
+| Rate Limiting    | 10 req/s per IP (commented out)     |
+| Caching          | Static assets (commented out)       |
+| SSL/HTTPS        | Self-signed cert (commented out)    |
+| Security Headers | XSS, clickjacking protection        |
 
 ### 3. Generate SSL Certificate (Local Testing)
 
@@ -106,7 +105,7 @@ cp nginx.conf.example nginx.conf
 # 2. Edit nginx.conf - replace yourdomain.com with your domain
 # 3. Build and run
 docker build -t node-app .
-docker run -p 80:80 -p 443:443 -e API_ENDPOINT=https://api.openweathermap.org -e API_KEY=<API_KEY> node-app
+docker run -p 80:80 -e API_ENDPOINT=https://api.openweathermap.org -e API_KEY=<API_KEY> node-app
 ```
 
 ## AWS Deployment
@@ -244,11 +243,10 @@ docker run -p 80:80 -p 443:443 -e API_ENDPOINT=https://api.openweathermap.org -e
 6. Open in browser:
    ```
    http://<PUBLIC_IP>
-   https://<PUBLIC_IP>
-   https://<PUBLIC_IP>/weather?q=manila
+   http://<PUBLIC_IP>/weather?q=manila
    ```
 
-> **Note:** HTTP (port 80) automatically redirects to HTTPS. The self-signed certificate will show a browser warning — click "Advanced" > "Proceed" for testing.
+> **Note:** App runs on port 80. SSL is available but commented out in nginx.conf.
 
 ## Updating & Deploying Code Changes
 

@@ -1,20 +1,33 @@
 #!/bin/bash
 
 # ============================================================
-# AWS ECR Deploy Script
+# AWS ECR Deploy Script (Example)
 # ============================================================
+
+# Cleanup old containers and images
+echo "Cleaning up old containers and images..."
+docker stop $(docker ps -q) 2>/dev/null
+docker rm $(docker ps -aq) 2>/dev/null
+docker rmi $(docker images -q) 2>/dev/null
+docker system prune -a --force 2>/dev/null
+echo "Cleanup completed!"
+
+# Build Docker image
+echo "Building Docker image..."
+docker build -t node-app .
+echo "Docker image built successfully!"
 
 # Authenticate to ECR
 echo "Authenticating to ECR..."
-aws ecr get-login-password --region <REGION> | docker login --username AWS --password-stdin <AWS_ID>.dkr.ecr.<REGION>.amazonaws.com
+aws ecr get-login-password --region <REGION> | docker login --username AWS --password-stdin <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com
 echo "Authenticated successfully!"
 
 # Tag the image
 echo "Tagging image..."
-docker tag node-app:latest <AWS_ID>.dkr.ecr.<REGION>.amazonaws.com/node-app:latest
+docker tag node-app:latest <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/node-app:latest
 echo "Image tagged successfully!"
 
 # Push to ECR
 echo "Pushing image to ECR..."
-docker push <AWS_ID>.dkr.ecr.<REGION>.amazonaws.com/node-app:latest
-echo "Image pushed to Amazon ECR successfully!"
+docker push <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/node-app:latest
+echo "Image pushed to ECR successfully!"
