@@ -1,4 +1,4 @@
-# Node.js App - Deploy to AWS ECR, ECS, Fargate
+# Node.js App - Deploy to AWS ECR, ECS, Fargate & VPC
 
 A simple Node.js app, built as a hands-on project for learning AWS deployment with ECR, ECS, and Fargate.
 
@@ -15,6 +15,7 @@ A simple Node.js app, built as a hands-on project for learning AWS deployment wi
 | AWS Fargate         | Serverless compute engine for ECS                      |
 | AWS Secrets Manager | Stores and manages secrets like API keys               |
 | AWS IAM             | Manages access roles and permissions                   |
+| AWS VPC             | Virtual Private Cloud - isolated network for resources |
 | AWS CLI             | Command-line tool for managing AWS services            |
 
 ## Architecture
@@ -28,14 +29,19 @@ A simple Node.js app, built as a hands-on project for learning AWS deployment wi
                                                 │
             ┌───────────────────────────────────┘
             ▼
- ┌── ECS Fargate Cluster ────────────────────────────────┐
- │ Cluster: node-app-dev-cluster                         │
- │                                                       │
- │ ┌── Service: node-app-dev-service ──────────────────┐ │
- │ │                                                   │ │
- │ │  [ Task 1: Nginx :80 → Node.js :5000 ]            │ │
- │ └───────────────────────────────────────────────────┘ │
- └───────────────────────────────────────────────────────┘
+┌── VPC (10.0.0.0/16) ────────────────────────────────────┐
+│                                                         │
+│ ┌── ECS Fargate Cluster ──────────────────────────────┐ │
+│ │ Cluster: node-app-dev-cluster                       │ │
+│ │                                                     │ │
+│ │ ┌── Service: node-app-dev-service ────────────────┐ │ │
+│ │ │                                                 │ │ │
+│ │ │  [ Task 1: Nginx :80 → Node.js :5000 ]          │ │ │
+│ │ └─────────────────────────────────────────────────┘ │ │
+│ └─────────────────────────────────────────────────────┘ │
+│                                                         │
+│  Public Subnets ──▶ Security Group ──▶ ENI             │
+└─────────────────────────────────────────────────────────┘
 
  NGINX FEATURES (commented out, available when needed):
   • Load Balancing ──▶ Distributes traffic across tasks
@@ -406,3 +412,13 @@ aws ec2 delete-vpc --vpc-id "$VPC_ID"
 9. Go to **IAM** > **Roles** > select `ECSTaskExecutionRoleSecrets` > **Delete**
 10. Go to **VPC** > **Security Groups** > select `node-app-sg` > **Delete**
 11. Go to **VPC** > **Your VPCs** > select VPC > **Delete** (delete subnets first)
+
+---
+
+### Author
+
+**Michael B. Antoni**
+
+- **Email:** michaelantoni.tech@gmail.com
+- **Website:** [https://michaelantoni.vercel.app](https://michaelantoni.vercel.app)
+- **LinkedIn:** [https://linkedin.com/in/m-antoni](https://linkedin.com/in/m-antoni)
