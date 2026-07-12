@@ -9,7 +9,7 @@ set -e # Stop execution if a command fails
 #   4. Delete ECR Repository
 #   5. Delete Secrets from Secrets Manager
 #   6. Detach policies and delete IAM Role
-#   7. Delete VPC networking (IGW, Subnets, Route Tables, SG, VPC)
+#   7. Delete VPC networking (VPC Endpoints, IGW, Subnets, Route Tables, SG, VPC)
 #
 # Estimated time: ~2-5 minutes (service deletion is the slowest step)
 # ============================================================
@@ -17,11 +17,15 @@ set -e # Stop execution if a command fails
 # ============================================================
 # 1. Cluster / Service / Task Definition cleanup
 # ============================================================
-echo "Deleting ECS Service..."
-aws ecs delete-service --cluster node-app-dev-cluster --service node-app-dev-service --force || true
-
-echo "Waiting for service deletion to finalize..."
-aws ecs wait services-inactive --cluster node-app-dev-cluster --services node-app-dev-service || true
+SERVICES=$(aws ecs list-services --cluster node-app-dev-cluster --query "serviceArns[]" --output text)
+if [ -n "$SERVICES" ]; then
+    for SVC in $SERVICES; do
+        echo "Deleting ECS Service: $SVC"
+        aws ecs delete-service --cluster node-app-dev-cluster --service "$SVC" --force || true
+    done
+    echo "Waiting for services to become inactive..."
+    aws ecs wait services-inactive --cluster node-app-dev-cluster --services $SERVICES || true
+fi
 
 echo "Deleting ECS Cluster..."
 aws ecs delete-cluster --cluster node-app-dev-cluster
@@ -67,6 +71,15 @@ aws iam delete-role --role-name ECSTaskExecutionRoleSecrets
 SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=node-app-sg" --query "SecurityGroups[0].GroupId" --output text)
 VPC_ID=$(aws ec2 describe-security-groups --group-ids "$SG_ID" --query "SecurityGroups[0].VpcId" --output text)
 
+echo "Deleting VPC Endpoints..."
+for VPCE in $(aws ec2 describe-vpc-endpoints \
+  --filters "Name=vpc-id,Values=$VPC_ID" \
+  --query "VpcEndpoints[*].VpcEndpointId" \
+  --output text); do
+    echo "Deleting VPC Endpoint: $VPCE"
+    aws ec2 delete-vpc-endpoints --vpc-endpoint-ids "$VPCE" || true
+done
+
 echo "Detaching and deleting Internet Gateways..."
 for IGW in $(aws ec2 describe-internet-gateways \
   --filters "Name=attachment.vpc-id,Values=$VPC_ID" \
@@ -89,7 +102,7 @@ done
 echo "Deleting Route Tables..."
 for RTB in $(aws ec2 describe-route-tables \
   --filters "Name=vpc-id,Values=$VPC_ID" \
-  --query "RouteTables[?Associations[0].Main!=\`true\`].RouteTableId" \
+  --query 'RouteTables[?Associations[0].Main!=`true`].RouteTableId' \
   --output text); do
     echo "Deleting Route Table: $RTB"
     aws ec2 delete-route-table --route-table-id "$RTB"

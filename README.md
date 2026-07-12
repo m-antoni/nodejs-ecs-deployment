@@ -353,31 +353,43 @@ Delete all AWS resources to avoid unnecessary charges.
 ### Using AWS CLI
 
 ```bash
-# Delete ECS service
-aws ecs update-service --cluster node-app-dev-cluster --service node-app-dev-service --desired-count 0
-aws ecs delete-service --cluster node-app-dev-cluster --service node-app-dev-service
-
-# Delete task definition
-aws ecs deregister-task-definition --task-definition node-app-dev-task
+# Delete ECS service (dynamically looks up services in cluster)
+SERVICES=$(aws ecs list-services --cluster node-app-dev-cluster --query "serviceArns[]" --output text)
+for SVC in $SERVICES; do
+    aws ecs delete-service --cluster node-app-dev-cluster --service "$SVC" --force
+done
+aws ecs wait services-inactive --cluster node-app-dev-cluster --services $SERVICES
 
 # Delete ECS cluster
 aws ecs delete-cluster --cluster node-app-dev-cluster
+
+# Delete task definitions (dynamically looks up all revisions)
+TASK_DEFS=$(aws ecs list-task-definitions --family-prefix node-app-dev-task --query "taskDefinitionArns[]" --output text)
+for TASK_DEF in $TASK_DEFS; do
+    aws ecs deregister-task-definition --task-definition "$TASK_DEF"
+done
+aws ecs delete-task-definitions --task-definitions $TASK_DEFS
 
 # Delete ECR repository
 aws ecr delete-repository --repository-name node-app --force
 
 # Delete secrets
-aws secretsmanager delete-secret --secret-id dev/node-app-api-endpoint --force-delete
-aws secretsmanager delete-secret --secret-id dev/node-app-api-key --force-delete
+aws secretsmanager delete-secret --secret-id dev/node-app-api-endpoint --force-delete-without-recovery
+aws secretsmanager delete-secret --secret-id dev/node-app-api-key --force-delete-without-recovery
 
 # Delete IAM role
 aws iam delete-role-policy --role-name ECSTaskExecutionRoleSecrets --policy-name GetSecretsValue-node-app-ecs-deploy
 aws iam detach-role-policy --role-name ECSTaskExecutionRoleSecrets --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 aws iam delete-role --role-name ECSTaskExecutionRoleSecrets
 
-# Delete security group and VPC (looked up by SG name)
+# Delete VPC networking (looked up by SG name)
 SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=node-app-sg" --query "SecurityGroups[0].GroupId" --output text)
 VPC_ID=$(aws ec2 describe-security-groups --group-ids "$SG_ID" --query "SecurityGroups[0].VpcId" --output text)
+
+# Delete VPC Endpoints
+for VPCE in $(aws ec2 describe-vpc-endpoints --filters "Name=vpc-id,Values=$VPC_ID" --query "VpcEndpoints[*].VpcEndpointId" --output text); do
+    aws ec2 delete-vpc-endpoints --vpc-endpoint-ids "$VPCE"
+done
 
 # Delete Internet Gateways
 for IGW in $(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$VPC_ID" --query "InternetGateways[*].InternetGatewayId" --output text); do
@@ -390,8 +402,8 @@ for SUBNET in $(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" 
     aws ec2 delete-subnet --subnet-id "$SUBNET"
 done
 
-# Delete Route Tables
-for RTB in $(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" --query "RouteTables[?Associations[0].Main!=\`true\`].RouteTableId" --output text); do
+# Delete Route Tables (excluding main)
+for RTB in $(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" --query 'RouteTables[?Associations[0].Main!=`true`].RouteTableId' --output text); do
     aws ec2 delete-route-table --route-table-id "$RTB"
 done
 
