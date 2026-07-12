@@ -122,10 +122,30 @@ docker run -p 80:80 -e API_ENDPOINT=https://api.openweathermap.org -e API_KEY=<A
 1. Select your new repository
 2. Click **View push commands**
 3. Follow the 4 commands shown — they will be specific to your account and region:
+
    - **Command 1**: Authenticate Docker to ECR
+
+   ```bash
+   aws ecr get-login-password --region <your-region> | docker login --username AWS --password-stdin <your-account-id>.dkr.ecr.<your-region>.amazonaws.com
+   ```
+
    - **Command 2**: Build your image
+
+   ```bash
+   docker build -t node-app .
+   ```
+
    - **Command 3**: Tag your image
+
+   ```bash
+   docker tag node-app:latest <your-account-id>.dkr.ecr.<your-region>.amazonaws.com/node-app:latest
+   ```
+
    - **Command 4**: Push your image
+
+   ```bash
+   docker push <your-account-id>.dkr.ecr.<your-region>.amazonaws.com/node-app:latest
+   ```
 
 ### 2. Create Secrets
 
@@ -332,7 +352,7 @@ aws ecs update-service --cluster node-app-dev-cluster --service node-app-dev-ser
 aws ecs delete-service --cluster node-app-dev-cluster --service node-app-dev-service
 
 # Delete task definition
-aws ecs deregister-task-definition --task-definition node-app-dev-task:1
+aws ecs deregister-task-definition --task-definition node-app-dev-task
 
 # Delete ECS cluster
 aws ecs delete-cluster --cluster node-app-dev-cluster
@@ -345,16 +365,32 @@ aws secretsmanager delete-secret --secret-id dev/node-app-api-endpoint --force-d
 aws secretsmanager delete-secret --secret-id dev/node-app-api-key --force-delete
 
 # Delete IAM role
-aws iam detach-role-policy --role-name ECSTaskExecutionRoleSecrets --policy-arn arn:aws:iam::aws:policy/SecretsManagerReadWrite
+aws iam delete-role-policy --role-name ECSTaskExecutionRoleSecrets --policy-name GetSecretsValue-node-app-ecs-deploy
 aws iam detach-role-policy --role-name ECSTaskExecutionRoleSecrets --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 aws iam delete-role --role-name ECSTaskExecutionRoleSecrets
 
-# Delete security group
-aws ec2 delete-security-group --group-name node-app-sg
+# Delete security group and VPC (looked up by SG name)
+SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=node-app-sg" --query "SecurityGroups[0].GroupId" --output text)
+VPC_ID=$(aws ec2 describe-security-groups --group-ids "$SG_ID" --query "SecurityGroups[0].VpcId" --output text)
 
-# Delete VPC (must delete subnets first)
-aws ec2 describe-subnets --filters "Name=vpc-id,Values=<VPC_ID>" --query "Subnets[*].SubnetId" --output text | xargs -n1 aws ec2 delete-subnet --subnet-id
-aws ec2 delete-vpc --vpc-id <VPC_ID>
+# Delete Internet Gateways
+for IGW in $(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$VPC_ID" --query "InternetGateways[*].InternetGatewayId" --output text); do
+    aws ec2 detach-internet-gateway --internet-gateway-id "$IGW" --vpc-id "$VPC_ID"
+    aws ec2 delete-internet-gateway --internet-gateway-id "$IGW"
+done
+
+# Delete Subnets
+for SUBNET in $(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" --query "Subnets[*].SubnetId" --output text); do
+    aws ec2 delete-subnet --subnet-id "$SUBNET"
+done
+
+# Delete Route Tables
+for RTB in $(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" --query "RouteTables[?Associations[0].Main!=\`true\`].RouteTableId" --output text); do
+    aws ec2 delete-route-table --route-table-id "$RTB"
+done
+
+aws ec2 delete-security-group --group-id "$SG_ID"
+aws ec2 delete-vpc --vpc-id "$VPC_ID"
 ```
 
 ### Using AWS Console (UI)
